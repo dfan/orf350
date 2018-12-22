@@ -1,0 +1,208 @@
+---
+title: 'ORF 350: Assignment 2'
+author: "David Fan"
+date: "3/8/2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=60), tidy=TRUE, warning=FALSE, message = FALSE, fig.path='Plots/', echo = TRUE, cache = TRUE)
+library(ggplot2)
+library(knitr)
+```
+Collaborator: Brandon Tan
+
+## Question 1: Maximum Likelihood Estimator (MLE) and Asymptotic Normality
+### Part I
+Slutzky's theorem tells us that if two random variables $X_n \xrightarrow{D} X$ and $Y_n \xrightarrow{P} c$, then $X_nY_n \xrightarrow{D} cX$.
+Let $X_n = \sqrt{n}(\hat{\theta}_n - \theta)$ and $Y_n = \sqrt{I(\hat{\theta}_n)}$. The blog post on EdX shows how the empirical Fisher info (a random quantity) $\sqrt{I(\hat{\theta}_n)}$ converges in probability to the population Fisher info (a constant) $\sqrt{I(\theta)}$. Thus, it is implied that $\hat{\theta_n}$ is a consistent estimator of $\theta$. By Slutzky's theorem, $\sqrt{n}(\hat{\theta}_n - \theta)\sqrt{I(\hat{\theta}_n)} \xrightarrow{D} \sqrt{I(\theta)}*N(0, \frac{1}{I(\theta)})$. The right hand side is equivalent to $N(0, \frac{I(\theta)}{I(\theta)}) \sim N(0,1)$. Thus, $\sqrt{n}(\hat{\theta}_n - \theta)\sqrt{I(\hat{\theta}_n)} \xrightarrow{D} N(0,1)$. After some transformations of the random variable, we get $\hat{\theta_n} \xrightarrow{D} N(\theta, \frac{1}{nI(\hat{\theta_n})})$.
+
+This Gaussian has mean $\theta$ and standard deviation $\sqrt{\frac{1}{nI(\hat{\theta}_n)}}$, so the asymptotic (1-$\alpha$) confidence interval for $\theta$ is $\boxed{[\hat{\theta}_n - z_{\alpha / 2} * \frac{1}{\sqrt{nI(\hat{\theta}_n)}}, \hat{\theta}_n + z_{\alpha / 2} * \frac{1}{\sqrt{nI(\hat{\theta}_n)}}]}$.
+
+We can verify this: Let $F_n$ be the CDF of $\sqrt{n}(\hat{\theta}_n - \theta)\sqrt{I(\hat{\theta}_n)}$. Since $\sqrt{n}(\hat{\theta}_n - \theta)\sqrt{I(\hat{\theta}_n)} \xrightarrow{D} N(0,1)$, $\lim\limits_{n \rightarrow \infty}F_n(x) = \Phi(x)$ where $\Phi(x)$ is the CDF of the standard normal distribution.
+\begin{align*}
+\lim\limits_{n \rightarrow \infty} F_n(z_{\alpha / 2}) - F_n(z_{-\alpha / 2}) &= \lim\limits_{n \rightarrow \infty} \Phi(z_{\alpha / 2}) - \Phi(-z_{\alpha / 2}) = 1 - \alpha \\
+F_n(z_{\alpha / 2}) - F_n(z_{-\alpha / 2}) &= P(z_{-\alpha / 2} < \sqrt{n}(\hat{\theta}_n - \theta)\sqrt{I(\hat{\theta}_n)} > z_{\alpha / 2}) \\
+&= P(\hat{\theta_n} - \frac{z_{\alpha / 2}}{\sqrt{nI(\hat{\theta_n})}} < \theta < \hat{\theta_n} - \frac{z_{-\alpha / 2}}{\sqrt{nI(\hat{\theta_n})}}) \\
+&= P(\hat{\theta_n} - \frac{z_{\alpha / 2}}{\sqrt{nI(\hat{\theta_n})}} < \theta < \hat{\theta_n} + \frac{z_{\alpha / 2}}{\sqrt{nI(\hat{\theta_n})}}) \\
+\lim\limits_{n \rightarrow \infty} P(\hat{\theta_n} - \frac{z_{\alpha / 2}}{\sqrt{nI(\hat{\theta_n})}} < \theta < \hat{\theta_n} + \frac{z_{\alpha / 2}}{\sqrt{nI(\hat{\theta_n})}}) &= 1 - \alpha
+\end{align*}
+
+### Part II
+$p_\theta(x) = (\theta - 1)x^{-\theta} * I\{x \geq 1\}$
+
+**a)** 
+Likelihood function: L($\theta$, x) = $\prod\limits_{i=1}^{n}p(x_i, \theta)$ for x $\geq$ 1
+
+Log-likelihood: l($\theta$, x) = $log(\prod\limits_{i=1}^{n}p(x_i, \theta))$ = $\sum\limits_{i=1}^{n}log[(\theta - 1)x_{i}^{-\theta}]$ = $\sum\limits_{i=1}^{n}[log(\theta - 1) - \theta log(x_i)] \\$
+$\frac{dl(\theta, x)}{d\theta} = \sum\limits_{i=1}^{n} \frac{1}{\theta - 1} - \theta log(x_i) \\$
+$\frac{dl(\theta, x)}{d\theta} = \frac{n}{\theta - 1} - \sum\limits_{i=1}^{n}log(x_i) = 0 \\$
+$\frac{n}{\theta - 1} = \sum\limits_{i=1}^{n}log(x_i) \\$
+$\boxed{\hat{\theta_n} = 1 + \frac{n}{\sum\limits_{i=1}^{n}log(xi)}}$
+
+**b)**
+From (0.1) in the HW handout, we know that our MLE is asymptotically normal. $\hat{\theta_n} \xrightarrow{D} N(\theta, \frac{1}{nI(\theta)})$, so the asymptotic variance is $\frac{1}{nI(\theta)}$. Let's find the population Fisher info:
+
+\begin{align*}
+I(\theta) &= E_\theta(-\frac{\partial^{2}}{\partial \theta^{2}}log(p_{\theta}(x))) \\
+log(p_{\theta}(x)) &= log[(\theta - 1)x^{-\theta}] \\
+&= log(\theta - 1) - \theta log(x) \\
+\frac{\partial^{2}}{\partial \theta^{2}}log(p_{\theta}(x)) &= \frac{\partial}{\partial \theta} [\frac{1}{\theta - 1} - log(x)] = -(\theta - 1)^{-2} \\
+I(\theta) &= E_{\theta}(\frac{1}{(\theta - 1)^{2}}) \\
+&= \int\limits_{1}^{\infty}\frac{1}{(\theta - 1)^{2}}*p_{\theta}(x)dx \\
+&= \int\limits_{1}^{\infty}\frac{x^{-\theta}}{\theta - 1}dx \\
+&= \frac{x^{-\theta + 1}}{(\theta-1)(\theta + 1)} \Big|_{1}^{\infty} \\
+&=  0 - \frac{1}{(\theta - 1)(-\theta + 1)} \\
+&= \frac{1}{(\theta - 1)^2}
+\end{align*}
+Finally, we plug the Fisher information back into the expression for asymptotic variance:
+
+$\boxed{\sigma^{2} = \frac{1}{nI(\theta)} = \frac{(\theta - 1)^{2}}{n}}$.
+
+**c)**
+We are given that $\sqrt{n}(\hat{\theta}_n - \theta)\ \xrightarrow{D} N(0, \frac{1}{I(\theta)})$ and $I(\hat{\theta_n}) \xrightarrow{P} I(\theta)$.
+As shown in part I, $\hat{\theta_n} \xrightarrow{D} N(\theta, \frac{1}{nI(\hat{\theta_n})})$. From part b, we just calculated that $I(\hat{\theta}) = \frac{1}{(\hat{\theta_n} - 1)^{2}}$. Therefore, $\sigma = \sqrt{\frac{1}{n}*(\hat{\theta_n}-1)^{2}} = \frac{\hat{\theta_n} - 1}{\sqrt{n}}.$
+
+Our 95% confidence interval is $\boxed{[\hat{\theta_n} \pm \frac{1.96}{\sqrt{n}}(\hat{\theta_n} - 1)]}$ where $\hat{\theta_n} = 1 + \frac{n}{\sum\limits_{i=1}^{n}log(xi)}$.
+
+**d)**
+Deriving the CDF for $p_{\theta}(x) = (\theta-1)x^{-\theta}$: 
+\begin{align*}
+F(x) &= \int_{1}^{x} (\theta-1)x^{-\theta} \\
+F(x) &= -x^{-\theta+1}\Big|_{1}^{x} \\
+F(x) &= 1-x^{-\theta + 1} \\
+\end{align*}
+Find $F^{-1}(U)$:
+\begin{align*}
+x &= 1 - (F^{-1}(U))^{-\theta + 1} \\
+F^{-1}(U) &= (1-x)^{\frac{1}{-\theta + 1}}
+\end{align*}
+Since $\theta$ = 2, then \boxed{F^{-1}(U) = \frac{1}{(1-u)}}. The below code demonstrates the effectiveness of the 95% confidence interval. $\\$
+
+```{r Q1d}
+n <- 100
+theta <- 2
+cdfi <- function(x) {return(1 / (1-x)^(theta - 1))}
+effective_arr <- rep(0, 10000)
+for (i in 1:10000) {
+  dataset <- sapply(runif(100, 0, 1), cdfi)
+  # Construct 95% confidence interval
+  z <- 1.96
+  log_sums <- sum(sapply(dataset, log))
+  theta_hat_n <- 1 + n / log_sums
+  CI_lower <- theta_hat_n - z / sqrt(n) * (theta_hat_n - 1)
+  CI_upper <- theta_hat_n + z / sqrt(n) * (theta_hat_n - 1)
+  if (CI_lower <= theta & theta <= CI_upper) {
+    effective_arr[i] <- 1
+  }
+}
+mean(effective_arr)
+```
+
+\pagebreak
+
+## Question 2: Non-Existence of MLE
+$p = \frac{1}{1+log(\theta)}$ where $\theta > 1$.
+
+Case 1: all observations are 1
+\begin{align*}
+L_n &= \prod\limits_{i=1}^{n}p = p^n \\
+ln &= log(Ln) \\
+&= \sum\limits_{i=1}^{n}log(p) \\
+\frac{dl_n}{dp} &= \sum\limits_{i=1}^{n} \frac{1}{p} \\
+&= \frac{n}{p} = 0 \\
+\end{align*}
+There is no MLE! There is no value of $\theta$ that makes the above derivative 0, and no smallest value of $\theta$ > 1 that can maximize the log-likelihood function $ln$ since $ln$ is a monotonically decreasing function with negative derivative for all $\theta$ < 1.
+
+Case 2: all observations are 0
+\begin{align*}
+L_n &= \prod\limits_{i=1}^{n}(1-p) = (1-p)^n \\
+ln &= log(Ln) \\
+&= \sum\limits_{i=1}^{n}log(1-p) \\
+\frac{dl_n}{dp} &= \sum\limits_{i=1}^{n} \frac{1}{1-p}  \\
+&= \frac{n}{1-p} = 0
+\end{align*}
+We see again there is no MLE! There is no value of $\theta$ that makes the above derivative 0. There is also no largest value of $\theta$ > 1 that can maximize the log-likelihood function $ln$ since $ln$ is a monotonically increasing function with positive derivative for all $\theta$ > 1. 
+
+\pagebreak
+
+## Question 3: Exploratory Data Analysis
+```{r Q3}
+housingprices <- read.csv("housingprice.csv", header = TRUE)
+# 3a)
+
+#prices_zipcode <- aggregate(housingprices[, c("zipcode", "price")], by = list(housingprices$zipcode), FUN = mean)
+#prices_zipcode <- prices_zipcode[, c("zipcode", "price")]
+#prices_zipcode <- prices_zipcode[order(prices_zipcode$price, decreasing = TRUE), ]
+prices_zipcode <- tapply(housingprices$price, factor(housingprices$zipcode), mean)
+prices_zipcode <- sort(prices_zipcode, decreasing = TRUE)
+max_three <- names(prices_zipcode)[1:3]
+df <- data.frame(housingprices[c(which(housingprices$zipcode == max_three[1]), which(housingprices$zipcode == max_three[2]), which(housingprices$zipcode == max_three[3])), c("zipcode", "price")])
+df$zipcode <- factor(df$zipcode)
+ggplot(df, aes(x = zipcode, y = price)) + geom_boxplot()
+
+# 3b)
+ggplot(housingprices[,c("sqft_living", "price")], aes(x = sqft_living, y = price)) + geom_point()
+```
+
+\pagebreak
+
+## Question 4: A Simple Linear Model
+```{r Q4_chunk_1}
+training_data <- read.csv("train.data.csv", header = TRUE)
+testing_data <- read.csv("test.data.csv", header = TRUE)
+
+testing_r2 <- function(model, data) {
+  predictions <- predict(model, data)
+  RSS <- sum((data$price - predictions)^2)
+  TSS <- sum((data$price - mean(data$price))^2)
+  return(1 - RSS/TSS)
+}
+
+# 4a)
+training_model <- lm(price ~ bedrooms + bathrooms + sqft_living + sqft_lot, data = training_data)
+coef(training_model)
+paste("Training data R^2:", summary(training_model)$r.squared)
+paste("Testing data R^2:", testing_r2(training_model, testing_data))
+
+# 4b)
+training_model <- lm(price ~ bedrooms + bathrooms + sqft_living + sqft_lot + factor(zipcode), data = training_data)
+coef(training_model)
+paste("Training data R^2:", summary(training_model)$r.squared)
+paste("Testing data R^2:", testing_r2(training_model, testing_data))
+
+# 4c)
+billgates_house <- read.csv("fancyhouse.csv", header = TRUE)
+billgates_house$zipcode <- factor(billgates_house$zipcode)
+paste("Predicted price of Bill Gate's House:", predict(training_model, billgates_house))
+```
+The predicted price seems reasonable because for every parameter with a positive coefficient in the linear model, Bill Gate's is higher than the most expensive house in the training set. For the only parameter with a negative coefficient (number of bedrooms), Bill Gate's is higher by a bit but there are more positive coefficients than negative ones. This explains why his house has a higher price than the most expensive house in the training dataset, which costs \$7,700,000 (found using command *training_data[which(training_data\$price == max(training_data\$price)), ]*).
+For comparison:
+
+```{r Q4_chunk_2}
+df <- t(data.frame(c("Bill Gates", 8, 25, 50000, 225000, 98039), c("Most expensive training house", 6, 8, 12050, 27600, 98102)))
+colnames(df) <-c("", "bedrooms", "bathrooms", "sqft_living", "sqft_lot", "zipcode")
+rownames(df) <- rep("", 2)
+kable(df)
+```
+
+**4d)**
+$R^2 = 1-\frac{RSS}{TSS}$, $RSS = ||Y - X\hat{\beta}||_2^2$ for design matrix without an extra covariate, and $RSS = ||Y - X_1\hat{\beta}_1||_2^2$ when an extra covariate is added to the design matrix. Compared to X, $X_1$ has an extra column and $\beta_1$ has an extra element compared to $\beta$. We see that if the extra element in $\beta_1$ is 0, or if the extra column in $X_1$ is entirely zeros, then the value of RSS is the same. However, if the extra element in $\beta_1$ is non-zero and the extra column in $X_1$ has non-zero elements, then we see that the quantity $Y - X_1\hat{\beta}_1$ is smaller and thus RSS is smaller. Because TSS is the same for both, then $R^2$ must be the same or higher for the design matrix with an extra covariate, because RSS must either be the same value or lower with an extra covariate.
+
+\pagebreak
+
+## Question 5: Feature Engineering
+```{r Q5}
+# 5a)
+training_model <- lm(price ~ bedrooms + bathrooms + sqft_living + sqft_lot + factor(zipcode) + bedrooms * bathrooms, data = training_data)
+coef(training_model)
+paste("Training data R^2:", summary(training_model)$r.squared)
+paste("Testing data R^2:", testing_r2(training_model, testing_data))
+
+# 5b)
+training_poly_model <- lm(price ~ poly(bedrooms, 3) + poly(bathrooms, 3) + sqft_living + sqft_lot + factor(zipcode), data = training_data)
+coef(training_poly_model)
+paste("Training data R^2:", summary(training_poly_model)$r.squared)
+paste("Testing data R^2:", testing_r2(training_poly_model, testing_data))
+```
+

@@ -1,0 +1,394 @@
+---
+title: 'ORF 350: Assignment 4'
+author: "David Fan"
+date: "4/10/2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=60), tidy=TRUE, warning=FALSE, message = FALSE, fig.path='Plots/', echo = TRUE, cache = TRUE)
+library(ggplot2)
+library(dplyr)
+library(glmnet)
+library(knitr)
+```
+
+Collaborator: Brandon Tan
+
+## Question 1: Sentiment Analysis on Amazon Product Reviews (25 points)
+
+```{r Q1}
+setwd("/Users/dfan/Dropbox/School/Sophomore\ Year/Spring\ 2017/ORF\ 350/Assignments/HW4")
+load("Amazon_SML.RData") # loads object "dat"
+
+# 1a)
+cat("Column names:", paste(names(dat), sep=","))
+paste("# of Reviews:", nrow(dat) - length(which(dat$review == "")))
+paste("Unique products:", length(unique(dat$name)))
+fivestar_ratings <- aggregate(rating~name, dat[which(dat$rating == 5),], FUN = NROW)
+paste("Product with most '5' ratings:", fivestar_ratings[order(fivestar_ratings$rating, decreasing = TRUE)[1],1])
+paste("Number of '5' ratings for product:", fivestar_ratings[order(fivestar_ratings$rating, decreasing = TRUE)[1],2])
+onestar_ratings <- aggregate(rating~name, dat[which(dat$rating == 1),], FUN = NROW)
+strwrap(paste("Product with most '1' ratings:", onestar_ratings[order(onestar_ratings$rating, decreasing = TRUE)[1],1]))
+paste("Number of '1' ratings for product:", onestar_ratings[order(onestar_ratings$rating, decreasing = TRUE)[1],2])
+
+# 1b)
+paste("Number of total '1' ratings:", length(which(dat$rating == 1)))
+paste("Number of total '5' ratings:", length(which(dat$rating == 5)))
+paste("The best performance of a constant classifer is 50%")
+
+# 1c)
+# run tdMat.R and splitData.R first
+source("tdMat.R")
+source("splitData.R")
+set.seed(10)
+lambda <- exp(seq(-20, -1, length.out = 99))
+model <- glmnet(train.x, train.y,family="binomial")
+cvfit <- cv.glmnet(train.x, train.y,family="binomial",type.measure="class",lambda=lambda)
+model_coef <- data.frame(rownames(coef(model, s = cvfit$lambda.1se)), matrix(coef(model, s = cvfit$lambda.1se)))
+names(model_coef) <- c("Variable", "Coefficient")
+model_coef <- model_coef[order(model_coef$Coefficient, decreasing = TRUE),]
+paste("Twenty most positive coefficients:")
+pos_coef <- model_coef[1:20, ]
+pos_coef
+model_coef <- model_coef[order(model_coef$Coefficient, decreasing = FALSE),]
+paste("Twenty most negative coefficients:")
+neg_coef <- model_coef[1:20, ]
+neg_coef
+
+# 1d)
+most_pos <- ""
+for (i in 1:nrow(pos_coef)) {
+  if (sum(train.x[, as.character(pos_coef[i,1])]) > 10) {
+    most_pos <- pos_coef[i,1]
+    break
+  }
+}
+paste("Most positive word in more than 10 docs:", most_pos)
+most_neg <- ""
+for (i in 1:nrow(neg_coef)) {
+  if (sum(train.x[, as.character(neg_coef[i,1])]) > 10) {
+    most_neg <- neg_coef[i,1]
+    break
+  }
+}
+paste("Most negative word in more than 10 docs:", most_neg)
+
+paste("Articles rated 1 with 'love':", length(which(train.x[, "love"] > 0 & train.y == 0)))
+paste("Articles rated 5 with 'love':", length(which(train.x[, "love"] > 0 & train.y == 1)))
+paste("Articles rated 1 with 'unfortun':", length(which(train.x[, "unfortun"] > 0 & train.y == 0)))
+paste("Articles rated 5 with 'unfortun':", length(which(train.x[, "unfortun"] > 0 & train.y == 1)))
+
+print("First article using 'love'");
+head(dat[as.numeric(train.tag[which(train.x[, "love"] > 0)])[1], "review"])
+print("First article using'unfortunate'")
+head(dat[as.numeric(train.tag[which(train.x[, "unfortun"] > 0)])[1], "review"])
+
+# 1e)
+predictions <- as.numeric(predict(model, test.x, type="class", s = cvfit$lambda.1se))
+paste("Misclassification rate of 1:", length(intersect(which(predictions != 0), which(test.y == 0))) / length(which(test.y == 0)))
+paste("Misclassification rate of 5:", length(intersect(which(predictions != 1), which(test.y == 1))) / length(which(test.y == 1)))
+paste("Total misclassification rate:", length(which(predictions != test.y)) / length(predictions))
+```
+Better than the constant classifier which at best has a misclassification rate of 50%!
+
+\pagebreak
+
+## Question 2: Non-existence of MLE for Logistic Regression (10 points)
+### 2a)
+\begin{align*}
+L(\beta) &= \prod\limits_{i=1, y=1}^{n} \eta(x_i)\prod\limits_{i=1,y=0}^{n} (1 - \eta(x_i)) \\
+l(\beta) &= log(\prod\limits_{i=1, y=1}^{n} \eta(x_i)\prod\limits_{i=1,y=0}^{n} (1 - \eta(x_i))) \\
+&= \sum\limits_{i=1}^{n}I(Y_i = 1)log(\eta(x_i)) + \sum\limits_{i=1}^{n}I(Y_i = 0)log(1 - \eta(x_i))
+\end{align*}
+
+### 2b)
+\begin{align*}
+\frac{dl(\beta)}{d\beta} &= \sum\limits_{i=1}^{n} I(Y_i = 1)*\frac{(1+e^{\beta x_i})x_i\beta e^{\beta x_i} - e^{\beta x_i}(x_i\beta e^{\beta x_i})}{(1+e^{\beta x_i})^2} * \frac{1 + e^{\beta x_i}}{e^{\beta x_i}} + \sum\limits_{i=1}^{n} I(Y_i = 0)*\frac{1 + e^{\beta x_i}}{1} * \frac{-e^{\beta x_i}}{(1+e^{\beta x_i})^2} \\
+&= \sum\limits_{i=1}^{n}I(y_i = 1) * \frac{1}{1 + e^{\beta x_i}} x_i - \sum\limits_{i=1}^{n}I(y_i = 0) * \frac{e^{\beta x_i}}{1 + e^{\beta x_i}} x_i
+\end{align*}
+When y = 0, only the second sum contributes. $\frac{e^{\beta x_i}}{1 + e^{\beta x_i}}$ > 0 and since $x_i \leq 0$, the total sum is positive. When y = 1, only the first sum contributes. $\frac{1}{1 + e^{\beta x_i}}$ > 0 and since $x_i > 0$, the total sum is also positive. This means that for any given values of $x_i$ and y, the derivative will be positive and so there is no single value of $\beta$ that maximizes this likelihood function. That is, the MLE $\hat{\beta} = \infty$.
+
+\pagebreak
+
+## Question 3: LDA and QDA for Multivariate Gaussian (25 points)
+### 3.1: Likelihood Model (5 points)
+\begin{align*}
+l(\mu_1, \mu_2, \eta, \sum) &= \sum\limits_{i=1}^{n} log p(x_i, y_i) \\
+&= \sum\limits_{i=1}^{n} I(y_i = 1)log(p(x_i, y_i)) + \sum\limits_{i=1}^{n} I(y_i = 2)log(p(x_i, y_i)) \\
+&= \sum\limits_{i=1}^{n} I(y_i = 1)log[p(x_i|y_i = 1)*p(y_i = 1)] + \sum\limits_{i=1}^{n} I(y_i = 2)log[p(x_i|y_i = 2)*p(y_i = 2)]
+\end{align*}
+
+Let $\eta = P(y_i = 1)$ and $1 - \eta = P(Y_i = 2) \\$
+$= \sum\limits_{i=1}^{n} I(y_i = 1)log[\frac{1}{(2\pi)^{d/2}|\sum|^{1/2}}e^{-(x_i - \mu_1)^{T}\sum^{-1}(x_i - \mu_1)/2}] + \\ \sum\limits_{i=1}^{n} I(y_i = 1)*log(\eta) + \sum\limits_{i=1}^{n} I(y_i = 2)log[\frac{1}{(2\pi)^{d/2}|\sum|^{1/2}}e^{-(x_i - \mu_2)^{T}\sum^{-1}(x_i - \mu_2)/2}] + \sum\limits_{i=1}^{n} I(y_i=2)*log(1-\eta) \\$
+$= -\frac{nd}{2}log(2\pi) - \frac{n}{2} log|\sum| - \frac{1}{2} \sum\limits_{i=1}^{n}I(y_i = 1)((x_i - \mu_1)^T \sum^{-1}(x_i - \mu_1)) - \frac{1}{2}\sum\limits_{i=1}^{n} I(y_i = 2)((x_i - \mu_2)^{T} \sum^{-1}(x_i - \mu_2)) + n_1 log(\eta) + n_2 log(1 - \eta) \\$
+
+### 3.2: MLE Estimation (10 points)
+\begin{align*}
+\frac{d(l(\mu_1, \mu_2, \eta, \sum))}{d\eta} &= \frac{n_1}{\eta} - \frac{n_2}{1 - \eta} &= 0 \\
+\frac{n_1}{\eta} &= \frac{n_2}{1 - \eta} \\
+n_1 - n_1 \eta - n_2 \eta &= 0 \\
+-\eta(n_1 + n_2) &= -n_1 \\
+\hat{\eta} &= \frac{n_1}{n_1 + n_2}
+\end{align*}
+
+\begin{align*}
+\frac{d(l(\mu_1, \mu_2, \eta, \sum))}{d\mu_1} &= \frac{d}{d\mu_1}[-\frac{1}{2}\sum\limits_{i=1}^{n} (I(y_i = 1)(x_i - \mu_1)^{T}) {\sum}^{-1}(x_i - \mu_1)] \\
+\frac{-1*2}{2} \sum\limits_{i=1}^{n} I(y_i = 1){\sum}^{-1}(x_i - \mu_1) &= 0 \\
+{\sum}^{-1}(\sum\limits_{i=1}^{n}[I(y_i = 1)x_i] - n_1\mu_1) &= 0 \\
+\sum\limits_{i=1}^{n}I(y_i = 1)x_i &= n_1 \mu_1 \\
+\hat{\mu_1} = \frac{\sum\limits_{i=1}^{n}I(y_i = 1)x_i}{n_1}
+\end{align*}
+In the same manner, we get $\hat{\mu_2} = \frac{\sum\limits_{i=1}^{n}I(y_i = 2)x_i}{n_2}$.
+
+### 3.3: MLE Estimation (10 points)
+Since $\sum^{-1}$ is symmetric, $\frac{\partial log|\sum|^{-1}}{\partial \sum^{-1}} = \sum$.
+Since $(x_i - \mu_1)^T\sum^{-1}(x_i - \mu_1)$ is scalar, we can write this to be equal to $Tr((x_i - \mu_1)^T\sum^{-1}(x_i - \mu_1))$.
+
+\begin{align*}
+\frac{\partial((x_i - \mu_1)^T\sum^{-1}(x_i - \mu_1))}{\partial \sum^{-1}} &= \frac{\partial(Tr((x_i - \mu_1)^T\sum^{-1}(x_i - \mu_1)))}{\partial \sum^{-1}} \\
+by \ hint \ 3 \, \ &= \frac{\partial(Tr((x_i - \mu_1)(x_i - \mu_1)^T\sum^{-1}))}{\partial \sum^{-1}} \\
+by \ hint \ 4 \, \ &= ((x_i - \mu_1)(x_i - \mu_1)^T)^T \\
+&= (x_i - \mu_1)(x_i - \mu_1)^T
+\end{align*}
+In the same manner, we get $\frac{\partial((x_i - \mu_2)^T\sum^{-1}(x_i - \mu_2))}{\partial \sum^{-1}} = (x_i - \mu_2)(x_i - \mu_2)^T$
+
+\begin{align*}
+\frac{\partial(l(\mu_1, \mu_2, \eta, \sum^{-1}))}{\partial \sum^{-1}} &= \frac{n}{2}\sum - \frac{1}{2}\sum\limits_{i=1}^{n}I(y_i = 1)(x_i - \mu_1)(x_i - \mu_1)^T - \frac{1}{2}\sum\limits_{i=1}^{n}I(y_i = 2)(x_i - \mu_2)(x_i - \mu_2)^T &= 0 \\
+\sum &= \frac{1}{n} \sum\limits_{i=1}^{n}I(y_i = 1)(x_i - \mu_1)(x_i - \mu_1)^T + \frac{1}{n}\sum\limits_{i=1}^{n}I(y_i = 2)(x_i - \mu_2)(x_i - \mu_2)^T \\
+\end{align*}
+Let $S_1 = \frac{1}{n_1}\sum\limits_{i:y_i = 1}^{n} (x_i - \mu_1)(x_i - \mu_1)^T$ and $S_2 = \frac{1}{n_2}\sum\limits_{i:y_i = 2}^{n} (x_i - \mu_2)(x_i - \mu_2)^T. \\$
+Then, $\hat{\sum} = \frac{1}{n}[n_1s_1 + n_2s_2]$.
+
+\pagebreak
+
+## Question 4: Naive Bayes (25 points)
+
+### 4.1 (10 points)
+```{r Q4.1}
+# 4.1
+source("./SpamAssassin/readRawEmail.R")
+mail <- readAllMessages(dirs = c("./SpamAssassin/easy_ham", "./SpamAssassin/spam"))
+
+list_body <- numeric(0)
+spam <- rep(0, length(mail))
+for (i in 1:length(mail)) {
+  tmp = mail[[i]]$body
+  tmp2 = paste(tmp$text,collapse="")
+  tmp3 = gsub("\\b([[:punct:]|[:digit:]])*[a-zA-Z]*([[:punct:]|[:digit:]])+
+                [a-zA-Z]*([[:punct:]|[:digit:]])*"," ",tmp2)
+  tmp4 = gsub("[^A-Za-z]"," ",tmp3)
+  list_body[[i]] <- tmp4
+  spam[i] <- mail[[i]]$spam
+}
+res <- as.matrix(TermDocumentMatrix(Corpus(VectorSource(list_body)), control = list(removePunctuation = TRUE, stemming = TRUE, wordLengths = c(3, 20))))
+
+JH_1 <- apply(res[, which(spam == 0)], 1, sum) / apply(res[, which(spam == 0)] > 0, 1, sum)
+JH_2 <- apply(res[, which(spam == 0)] > 0, 1, sum) / length(which(spam == 0))
+JS_1 <- apply(res[, which(spam == 1)], 1, sum) / apply(res[, which(spam == 1)] > 0, 1, sum)
+JS_2 <- apply(res[, which(spam == 1)] > 0, 1, sum) / length(which(spam == 1))
+sort(JH_1, decreasing = TRUE)[1:10]
+sort(JH_2, decreasing = TRUE)[1:10]
+sort(JS_1, decreasing = TRUE)[1:10]
+sort(JS_2, decreasing = TRUE)[1:10]
+```
+
+### 4.2 (10 points)
+MLE Derivations:
+
+Let $P(s_j = 1) = \eta$.
+\begin{align*}
+logp(w_{1:m, 1:n}, y_{1:m, 1:n}, s_{1:n}) &= log\prod\limits_{j=1}^{n}p(s_j)\prod\limits_{i=1}^{m}p(w_{ij}, y_{ij}|s_j) \\
+&= \sum\limits_{j=1}^{n} [logp(s_j) + \sum\limits_{i=1}^{m}logp(w_{ij}, y_{ij} | s_j)] \\
+&= \sum\limits_{j \in J_H}(log(1-\eta) + \sum\limits_{i=1}^{m}log p^-(w_{ij}, y_{ij})) + \sum\limits_{j \in J_S}(log(\eta) + \sum\limits_{i=1}^{m}log p^+(w_{ij}, y_{ij}))
+\end{align*}
+
+Where $logp^-(w_{ij}, y_{ij})=logp(w_{ij}, y_{ij} | s_j = 0) = w_{ij}log(\frac{\theta_i^- e^{-\lambda_i^-}\lambda_{i^-}^{y_{ij} - 1}}{(y_{ij} - 1)!}) + (1 - w_{ij})log(1 - \theta_i^-)$ and 
+$logp^+(w_{ij}, y_{ij}) = logp(w_{ij}, y_{ij} | s_j = 1) = w_{ij}log(\frac{\theta_i^+ e^{-\lambda_i^+}\lambda_{i^+}^{y_{ij} - 1}}{(y_{ij} - 1)!}) + (1 - w_{ij})log(1 - \theta_i^+)$.
+
+Let $n_0 = |J_H|$ and $n_1 = |J_S|$.
+\begin{align*}
+\frac{d()}{d\eta} &= -\sum\limits_{j \in J_H} \frac{1}{1 - \eta} + \sum\limits_{j \in J_S} \frac{1}{\eta} &= 0 \\
+-\frac{n_0}{1-\eta} + \frac{n_1}{\eta} &= 0 \\
+\frac{n_0}{1 - \eta} &= \frac{n_1}{\eta} \\
+n_0\eta &= n_1 - n_1\eta \\
+\eta(n_0 + n_1) &= n_1 \\
+\hat{\eta} &= \frac{n_1}{n_1 + n_0}
+\end{align*}
+
+\begin{align*}
+\frac{d()}{d\hat{\theta_i}^-} &= \sum\limits_{j \in J_H}\frac{w_{ij}}{\theta_i^-} + \sum\limits_{j \in J_H}\frac{-(1 - w_{ij})}{1 - \theta_i^-} &= 0 \\
+\frac{n_0}{\theta_i^-}\sum\limits_{j \in J_H}w_{ij} - \frac{n_0}{1 - \theta_i^-}\sum\limits_{j \in J_H}(1 - w_{ij}) &= 0 \\
+\frac{1 - \theta_i^-}{\theta_i^-} &= \frac{\sum\limits_{j \in J_H}(1 - w_{ij})}{\sum\limits_{j \in J_H}w_{ij}} \\
+\frac{1}{\theta_i^-} = \frac{\sum\limits_{j \in J_H}1}{\sum\limits_{j \in J_H} w_{ij}} &= \frac{|J_H|}{\sum\limits_{j \in J_H}w_{ij}} \\
+\hat{\theta_i^-} = \frac{\sum\limits_{j \in J_H}w_{ij}}{|J_H|}
+\end{align*}
+Similarly, we get $\hat{\theta_i^+} = \frac{\sum\limits_{j \in J_S}w_{ij}}{|J_S|}$.
+
+\begin{align*}
+\frac{d()}{d(\lambda_i^-)} &= \sum\limits_{j \in J_H} (\frac{w_{ij}(y_{ij} - 1)}{\lambda_i^-} - w_{ij}) &= 0 \\
+\frac{1}{\lambda_i^-} \sum\limits_{j \in J_H}(w_{ij}(y_{ij} - 1)) &= \sum\limits_{j \in J_H} w_{ij} \\
+\hat{\lambda_i^-} &= \frac{\sum\limits_{j \in J_H} (w_{ij}(y_{ij} - 1))}{\sum\limits_{j \in J_H}w_{ij}}
+\end{align*}
+Similarly, we get $\hat{\lambda_i^+} = \frac{\sum\limits_{j \in J_S} (w_{ij}(y_{ij} - 1))}{\sum\limits_{j \in J_S}w_{ij}}$.
+```{r 4.2-3}
+# 4.2
+set.seed(1)
+testingidx = sample(1:ncol(res),100)
+trainingidx = 1:ncol(res)
+trainingidx = trainingidx[-testingidx]
+
+res_train <- res[, trainingidx]
+spam_train <- spam[trainingidx]
+res_test <- res[, testingidx]
+spam_test <- spam[testingidx]
+
+# Calculate MLEs
+# eta hat
+n1 <- length(which(spam_train == 1))
+n0 <- length(which(spam_train == 0))
+eta_hat <- n1 / (n0 + n1)
+
+# theta hat and theta hat prime
+# wi,j = 1 if res[i,j] > 0 , = 0 otherwise
+# sj = 1 if document j is spam, 0 otherwise
+theta_hat <- apply(res_train[, spam_train] > 0, 1, sum) / n1
+theta_hat_p <- apply(res_train[, !spam_train] > 0, 1, sum) / n0
+
+# lambda hat and lambda hat prime
+denom <- (theta_hat * n1)
+denom[which(denom == 0)] <- denom[which(denom == 0)] + 0.0001 # pertubation to avoid division by 0
+lambda_hat <- apply((res_train[, spam_train] > 0) * (res_train[, spam_train] - 1), 1, sum) / denom
+denom <- (theta_hat_p * n0)
+denom[which(denom == 0)] <- denom[which(denom == 0)] + 0.0001 # pertubation to avoid division by 0
+lambda_hat_p <- apply((res_train[, !spam_train] > 0) * (res_train[, !spam_train] - 1), 1, sum) / denom
+
+# prediction accuracy on testing data
+log_perturb <- function(x) {
+  return(ifelse(x == 0, log(x + 0.0001), log(x)))
+}
+
+test_predictions <- rep(0, ncol(res_test))
+log_prob1 <- rep(0, ncol(res_test))
+log_prob2 <- rep(0, ncol(res_test))
+
+for (j in 1:ncol(res_test)) {
+  log_prob1[j] <- sum((res_test[,j]>0)*(log_perturb(theta_hat) - lambda_hat + (res_test[,j]-1)*log_perturb(lambda_hat)), na.rm = TRUE)
+  log_prob1[j] <- log_prob1[j] + sum((res_test[,j]==0)*(log_perturb(1-theta_hat)), na.rm = TRUE)  
+  log_prob2[j] <- sum((res_test[,j]>0)*(log(theta_hat_p) - lambda_hat_p + (res_test[,j]-1)*log_perturb(lambda_hat_p)), na.rm = TRUE)
+  log_prob2[j] <- log_prob2[j] + sum((res_test[,j]==0)*log_perturb(1-theta_hat_p), na.rm = TRUE)
+  p_spam <- sum(spam_train)/length(spam_train)
+  test_predictions[j] <- (log_prob1[j]-log_prob2[j] + log(p_spam/(1-p_spam)) > 0)
+}
+paste("Prediction accuracy on test data:",mean(test_predictions == spam_test))
+
+# 4.3
+source("./SpamAssassin/readRawEmail.R")
+mail <- readAllMessages(dirs = c("./SpamAssassin/easy_ham", "./SpamAssassin/spam"))
+
+list_body <- numeric(0)
+spam <- rep(0, length(mail))
+for (i in 1:length(mail)) {
+  tmp = mail[[i]]$body
+  tmp2 = paste(tmp$text,collapse="")
+  tmp3 = gsub("\\b([[:punct:]])", "", tmp2)
+  #tmp3 = gsub("\\b([[:punct:]|[:digit:]])*[a-zA-Z]*([[:punct:]|[:digit:]])+
+                #[a-zA-Z]*([[:punct:]|[:digit:]])*"," ",tmp2)
+  tmp4 = gsub("[^A-Za-z]"," ",tmp3)
+  list_body[[i]] <- tmp4
+  spam[i] <- mail[[i]]$spam
+}
+res <- as.matrix(TermDocumentMatrix(Corpus(VectorSource(list_body)), control = list(removePunctuation = TRUE, stemming = TRUE, wordLengths = c(3, 20))))
+
+set.seed(1)
+testingidx = sample(1:ncol(res),100)
+trainingidx = 1:ncol(res)
+trainingidx = trainingidx[-testingidx]
+
+res_train <- res[, trainingidx]
+spam_train <- spam[trainingidx]
+res_test <- res[, testingidx]
+spam_test <- spam[testingidx]
+
+# Calculate MLEs
+# eta hat
+n1 <- length(which(spam_train == 1))
+n0 <- length(which(spam_train == 0))
+eta_hat <- n1 / (n0 + n1)
+
+# theta hat and theta hat prime
+# wi,j = 1 if res[i,j] > 0 , = 0 otherwise
+# sj = 1 if document j is spam, 0 otherwise
+theta_hat <- apply(res_train[, spam_train] > 0, 1, sum) / n1
+theta_hat_p <- apply(res_train[, !spam_train] > 0, 1, sum) / n0
+
+# lambda hat and lambda hat prime
+denom <- (theta_hat * n1)
+denom[which(denom == 0)] <- denom[which(denom == 0)] + 0.0001 # pertubation to avoid division by 0
+lambda_hat <- apply((res_train[, spam_train] > 0) * (res_train[, spam_train] - 1), 1, sum) / denom
+denom <- (theta_hat_p * n0)
+denom[which(denom == 0)] <- denom[which(denom == 0)] + 0.0001 # pertubation to avoid division by 0
+lambda_hat_p <- apply((res_train[, !spam_train] > 0) * (res_train[, !spam_train] - 1), 1, sum) / denom
+
+# prediction accuracy on testing data
+log_perturb <- function(x) {
+  return(ifelse(x == 0, log(x + 0.0001), log(x)))
+}
+
+test_predictions <- rep(0, ncol(res_test))
+log_prob1 <- rep(0, ncol(res_test))
+log_prob2 <- rep(0, ncol(res_test))
+
+for (j in 1:ncol(res_test)) {
+  log_prob1[j] <- sum((res_test[,j]>0)*(log_perturb(theta_hat) - lambda_hat + (res_test[,j]-1)*log_perturb(lambda_hat)), na.rm = TRUE)
+  log_prob1[j] <- log_prob1[j] + sum((res_test[,j]==0)*(log_perturb(1-theta_hat)), na.rm = TRUE)  
+  log_prob2[j] <- sum((res_test[,j]>0)*(log(theta_hat_p) - lambda_hat_p + (res_test[,j]-1)*log_perturb(lambda_hat_p)), na.rm = TRUE)
+  log_prob2[j] <- log_prob2[j] + sum((res_test[,j]==0)*log_perturb(1-theta_hat_p), na.rm = TRUE)
+  p_spam <- sum(spam_train)/length(spam_train)
+  test_predictions[j] <- (log_prob1[j]-log_prob2[j] + log(p_spam/(1-p_spam)) > 0)
+}
+paste("Prediction accuracy on testing data:", mean(test_predictions == spam_test))
+```
+
+My intuition was that removing the punctuation does most of the heavy-lifting, since punctuation doesn't really mean anything with regards to classifying an email as spam or not. Including it in the model just creates uneccessary noise and distracts the model from what is more important, like looking at the start of each word to see if it's a number of not (maybe indicating a price or sales ad) or removing repetitive character sequences. I simplified regex #3 such that it only removes punctuation. As I expected, the prediction accuracy only dropped to 92%.
+
+\pagebreak
+
+## Question 5: The Bayes Rule (15 points)
+### 5.1 (10 points)
+P(x = 1) = P(x = 1 | y = 0)P(y = 0) + P(x = 1 | y = 1)P(y = 1) = $\frac{1}{3} * \frac{1}{2} + 0*\frac{1}{2} = \frac{1}{6}. \\$
+P(x = 2) = P(x = 2 | y = 0)P(y = 0) + P(x = 2 | y = 1)P(y = 1) = $\frac{2}{3} * \frac{1}{2} + \frac{1}{3}*\frac{1}{2} = \frac{1}{2}. \\$
+P(x = 3) = P(x = 3 | y = 0)P(y = 0) + P(x = 3 | y = 1)P(y = 1) = $0 * \frac{1}{2} + \frac{2}{3}*\frac{1}{2} = \frac{1}{3}. \\$
+
+Bayes rule: $h^*(x) = 1$ if P(Y=1|X=x) > P(Y=0|X=x), 0 otherwise.
+
+$h^*(1): \\$
+$P(Y=1|X=1) = \frac{0 * 1/2}{0 * \frac{1}{2} + \frac{1}{2}*\frac{1}{2}} = 0 \\$
+$P(Y=0|X=1) = \frac{\frac{1}{3}*\frac{1}{2}}{0*\frac{1}{2} + \frac{1}{3}*\frac{1}{2}} = 1 \\$
+So, $h^*(1) = 0$.
+
+$h^*(2): \\$
+$P(Y=1|X=2) = \frac{\frac{1}{3} * \frac{1}{2}}{\frac{1}{3} * \frac{1}{2} + \frac{2}{3}*\frac{1}{2}} = \frac{1}{3} \\$
+$P(Y=0|X=2) = \frac{\frac{2}{3}*\frac{1}{2}}{\frac{1}{3}*\frac{1}{2} + \frac{2}{3}*\frac{1}{2}} = \frac{2}{3} \\$
+So, $h^*(2) = 0$.
+
+$h^*(3): \\$
+$P(Y=1|X=3) = \frac{\frac{2}{3} * \frac{1}{2}}{\frac{2}{3} * \frac{1}{2} + 0*\frac{1}{2}} = 1 \\$
+$P(Y=0|X=3) = \frac{0*\frac{1}{2}}{\frac{2}{3}*\frac{1}{2} + 0*\frac{1}{2}} = 0 \\$
+So, $h^*(3) = 1$.
+
+Baye's risk: 
+\begin{align*}
+P(Y \neq h(X)) &= E_X[P(Y \neq h(X) | X)]\\
+&= \sum\limits_{k = 1}^{3} P(Y \neq h(X) | X = k)P(X = k) \\
+&= P(Y=1|X=1)P(X=1) + P(Y=1|X=2)P(X=2) + P(Y=0|X=3)P(X=3) \\
+&= 0*\frac{1}{6} + \frac{1}{3}*\frac{1}{2} + 0*\frac{1}{3} \\
+&= \frac{1}{6}
+\end{align*}
+
+### 5.2 (5 points)
+The joint-conditional likelihood is $P(X_1, X_2 | Y)$ and the marginal distribution is $P(Y)$.
+
+(a) With the Naive Bayes classifier, we assume that the parameters are independent, so $P(X_1, X_2|Y) = P(X_1|Y)P(X_2|Y)$. Y is binary so there are two realizations of Y (0 and 1). We calculate P(Y=+1), and $P(X_1 = 1|Y=1),P(X_2 = 1|Y=1),P(X_1 = 1|Y=-1),P(X_2 = 1|Y=-1)$. That is five parameters.
+
+(b) Without the Naive Bayes classifer, we don't assume the parameters are independent. We calculate P(Y = 1). We also calculate $P(X_1 = \pm 1, X_2 = \pm 1|Y = 1)$ which is 4 quantities, but we only need 3 to specify these since the sum of the probabilities equals 1. Similarly, we calculate $P(X_1 = \pm 1, X_2 = \pm 1|Y = -1)$ which is another 3 quantities. Thus, there are 1 + 3 + 3 = 7 quantities total.
